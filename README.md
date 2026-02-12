@@ -39,9 +39,15 @@ Dieser Fork enthaelt persoenliche Anpassungen, die GSD besser fuer deutschsprach
 
 10. **Debugger Fix**: `WebSearch` zu `WebFetch` in der Frontmatter-Tools-Liste korrigiert.
 
+11. **Adversarielle Verifikation**: 3-Agenten-System (Defender, Attacker, Auditor) ersetzt den Single-Verifier. Produziert DEFENSE.md, ATTACK.md, AUDIT.md + optionales DEBATE.md. Verdict: PASS / CONDITIONAL_PASS / FAIL.
+
+12. **File Ownership**: Plan-Frontmatter deklariert OWN/SHARED/READ-ONLY pro Datei -- verhindert Merge-Konflikte bei paralleler Ausfuehrung.
+
+13. **Retrospektive**: Nach Phase-Verifikation werden 2-3 Konventionen aus SUMMARY-Dateien extrahiert und dem User zur Aufnahme in CLAUDE.md vorgeschlagen.
+
 ### Custom Agents (`agents/`)
 
-22 eigene Agenten fuer verschiedene Domaenen (Accessibility, Astro, Docker, SEO, Security usw.). Jeder Agent hat eine spezifische Rolle, Domaenenwissen und Checkliste.
+25 Agenten: 22 Domaenen-Agenten (Accessibility, Astro, Docker, SEO, Security usw.) + 3 Verifikations-Agenten (Defender, Attacker, Auditor) fuer adversarielle Phase-Pruefung.
 
 Boilerplate ist in `AGENT-RULES.md` zentralisiert -- Agenten enthalten nur `<role>` und `<context>`. Keine Emojis in Output-Templates (konfigurierbar).
 
@@ -114,6 +120,8 @@ git merge upstream/main
 
 ## Agenten-Uebersicht
 
+### Domaenen-Agenten
+
 | Agent | Bereich | Trigger |
 |-------|---------|---------|
 | `accessibility-expert` | WCAG, BITV, BFSG | Barrierefreiheit, Screenreader |
@@ -138,6 +146,16 @@ git merge upstream/main
 | `template-architect` | Open-Source Templates | Template, Open Source |
 | `ui-designer` | UI/UX, Tailwind | Design, Styling, Responsive |
 | `windows-admin` | Windows, PowerShell, Office | PC einrichten, PowerShell |
+
+### Verifikations-Agenten (adversarielle Phase-Pruefung)
+
+| Agent | Rolle | Output |
+|-------|-------|--------|
+| `gsd-defender` | Baut Beweislage fuer Phase-Zielerreichung auf | DEFENSE.md |
+| `gsd-attacker` | Red-Team: findet Stubs, Wiring-Luecken, Security-Issues | ATTACK.md |
+| `gsd-auditor` | Neutraler Compliance-Audit mit gewichtetem Scoring | AUDIT.md + DEBATE.md |
+
+Diese 3 Agenten werden automatisch von `execute-phase` nach Abschluss aller Plans gestartet. Kein manueller Aufruf noetig.
 
 ---
 

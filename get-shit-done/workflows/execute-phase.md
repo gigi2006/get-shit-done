@@ -237,61 +237,56 @@ After all waves:
 <step name="verify_phase_goal">
 Verify phase achieved its GOAL, not just completed tasks.
 
+Uses **adversarial verification** (3-agent system: Defender, Attacker, Auditor) for robust phase validation. See `workflows/adversarial-verify.md` for full protocol.
+
+**Summary of the process:**
+
+1. Write context brief to `{phase_dir}/.context-brief.md`
+2. Spawn 3 agents in parallel:
+   - **gsd-defender**: Builds evidence case (DEFENSE.md)
+   - **gsd-attacker**: Red-teams for gaps (ATTACK.md)
+   - **gsd-auditor**: Neutral compliance audit (AUDIT.md)
+3. If HIGH/CRITICAL findings exist: spawn debate moderator (DEBATE.md)
+4. Synthesize verdict into VERIFICATION.md
+
 ```
-Task(
-  prompt="Verify phase {phase_number} goal achievement.
-Phase directory: {phase_dir}
-Phase goal: {goal from ROADMAP.md}
-Check must_haves against actual codebase. Create VERIFICATION.md.",
-  subagent_type="gsd-verifier",
-  model="{verifier_model}"
-)
-```
+## Adversarial Verification — Phase {X}: {Name}
 
-Read status:
-```bash
-grep "^status:" "$PHASE_DIR"/*-VERIFICATION.md | cut -d: -f2 | tr -d ' '
-```
-
-| Status | Action |
-|--------|--------|
-| `passed` | → update_roadmap |
-| `human_needed` | Present items for human testing, get approval or feedback |
-| `gaps_found` | Present gap summary, offer `/gsd:plan-phase {phase} --gaps` |
-
-**If human_needed:**
-```
-## ✓ Phase {X}: {Name} — Human Verification Required
-
-All automated checks passed. {N} items need human testing:
-
-{From VERIFICATION.md human_verification section}
-
-"approved" → continue | Report issues → gap closure
+Spawning Defender + Attacker + Auditor in parallel...
 ```
 
-**If gaps_found:**
+Follow the full process in `~/.claude/get-shit-done/workflows/adversarial-verify.md`.
+
+Read verdict from agent return: `VERDICT={PASS|CONDITIONAL_PASS|FAIL} score={N}% gaps={N}`
+
+| Verdict | Action |
+|---------|--------|
+| `PASS` | → retrospective → update_roadmap |
+| `CONDITIONAL_PASS` | Present findings, offer accept or `/gsd:plan-phase {phase} --gaps` |
+| `FAIL` | Present gap summary, offer `/gsd:plan-phase {phase} --gaps` |
+
+**If CONDITIONAL_PASS:**
 ```
-## ⚠ Phase {X}: {Name} — Gaps Found
+## Phase {X}: {Name} — Conditional Pass ({score}%)
 
-**Score:** {N}/{M} must-haves verified
-**Report:** {phase_dir}/{phase}-VERIFICATION.md
+{N} non-blocking findings. Options:
+1. Accept and continue → retrospective
+2. `/gsd:plan-phase {X} --gaps` to fix findings
+```
 
-### What's Missing
-{Gap summaries from VERIFICATION.md}
+**If FAIL:**
+```
+## Phase {X}: {Name} — Failed ({score}%)
 
----
-## ▶ Next Up
+{N} unresolved findings ({critical} critical, {high} high).
+Report: {phase_dir}/{padded_phase}-VERIFICATION.md
 
-`/gsd:plan-phase {X} --gaps`
+Next: `/gsd:plan-phase {X} --gaps`
 
 <sub>`/clear` first → fresh context window</sub>
-
-Also: `cat {phase_dir}/{phase}-VERIFICATION.md` — full report
-Also: `/gsd:verify-work {X}` — manual testing first
 ```
 
-Gap closure cycle: `/gsd:plan-phase {X} --gaps` reads VERIFICATION.md → creates gap plans with `gap_closure: true` → user runs `/gsd:execute-phase {X} --gaps-only` → verifier re-runs.
+Gap closure cycle: `/gsd:plan-phase {X} --gaps` reads VERIFICATION.md → creates gap plans with `gap_closure: true` → user runs `/gsd:execute-phase {X} --gaps-only` → adversarial verification re-runs.
 </step>
 
 <step name="retrospective">
