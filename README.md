@@ -47,7 +47,7 @@ Dieser Fork enthaelt persoenliche Anpassungen, die GSD besser fuer deutschsprach
 
 ### Custom Agents (`agents/`)
 
-25 Agenten: 22 Domaenen-Agenten (Accessibility, Astro, Docker, SEO, Security usw.) + 3 Verifikations-Agenten (Defender, Attacker, Auditor) fuer adversarielle Phase-Pruefung.
+26 Agenten: 22 Domaenen-Agenten (Accessibility, Astro, Docker, SEO, Security usw.) + 3 Verifikations-Agenten (Defender, Attacker, Auditor) + 1 Router-Agent fuer automatische Agenten-Auswahl.
 
 Boilerplate ist in `AGENT-RULES.md` zentralisiert -- Agenten enthalten nur `<role>` und `<context>`. Keine Emojis in Output-Templates (konfigurierbar).
 
@@ -134,7 +134,8 @@ git merge upstream/main
 | `docker-architect` | Docker, Traefik, Self-Hosting | Container, Docker Compose |
 | `dotnet-expert` | C#, .NET, ASP.NET | .NET, C#, Visual Studio |
 | `openclaw-expert` | OpenClaw AI | Claw, Skills, Channels |
-| `orchestrator` | Projektleitung | optimiere alles, Status |
+| `agent-router` | Automatische Agenten-Auswahl | welche Agenten, Projektstart |
+| `orchestrator` | Projektleitung (mit Auto-Detection) | optimiere alles, Status |
 | `project-profiler` | Projektanalyse | Profil erstellen, Projektstart |
 | `project-scanner` | Tech-Stack Scan | analysiere Projekt, Dependencies |
 | `python-expert` | Python, pip, Automation | Python Script, pip |
