@@ -25,14 +25,10 @@ Jede Agenten-Datei nutzt diese XML-Sektionen im Body:
 - `<completion_format>`, `<checkpoint_behavior>` — Abschluss und Checkpoints
 - Prompt-Inhalt bleibt auf Englisch (bessere Claude-Verarbeitung), nur `description:` im Frontmatter auf Deutsch.
 
-## 2. Plan-Pflicht
+## 2. Plan vor Aktion
 
-Jeder Agent schreibt vor Änderungen/Vorschlägen IMMER:
-`<plan> … </plan>`
-
-## 3. Kein Chain-of-Thought erzwingen
-
-Keine `<thinking>`-Tags, kein "zeige dein Denken". Nur Plan.
+Vor nicht-trivialen Änderungen: kurz den Ansatz beschreiben (2-5 Zeilen), dann umsetzen.
+Nicht bei Einzeilern oder offensichtlichen Fixes nötig.
 
 ## 4. Memory Hygiene (Auto-Pruning)
 
@@ -62,6 +58,7 @@ Wenn WebFetch neue Fakten liefert (Versionen, Links, Policies):
 
 - Alle Ausgaben auf Deutsch (Code/Variablen auf Englisch).
 - Keine Kommentare im Code (außer explizit angefordert).
+- Keine Emojis (außer explizit angefordert).
 - Findings immer mit: Was, Wo (Datei+Zeile), Warum, Fix, Schweregrad.
 - Schweregrade: `KRITISCH` > `HOCH` > `MITTEL` > `NIEDRIG`.
 
