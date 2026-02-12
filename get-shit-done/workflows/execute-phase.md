@@ -94,7 +94,14 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
    - Bad: "Executing terrain generation plan"
    - Good: "Procedural terrain generator using Perlin noise — creates height maps, biome zones, and collision meshes. Required before vehicle physics can interact with ground."
 
-2. **Spawn executor agents:**
+2. **File ownership check (parallel waves only):**
+
+   If wave has 2+ plans and `PARALLELIZATION=true`:
+   - Read `file_ownership` from each plan's frontmatter
+   - If any file appears in `own` of multiple plans → WARN and run those plans sequentially
+   - If `shared` files exist → note in executor prompt that concurrent writes may occur
+
+3. **Spawn executor agents:**
 
    Pass paths only — executors read files themselves with their fresh 200k context.
    This keeps orchestrator context lean (~10-15%).
@@ -285,6 +292,38 @@ Also: `/gsd:verify-work {X}` — manual testing first
 ```
 
 Gap closure cycle: `/gsd:plan-phase {X} --gaps` reads VERIFICATION.md → creates gap plans with `gap_closure: true` → user runs `/gsd:execute-phase {X} --gaps-only` → verifier re-runs.
+</step>
+
+<step name="retrospective">
+After verification passes, extract learnings from the completed phase.
+
+**Lightweight convention extraction (no extra agent — orchestrator does this):**
+
+1. Read all SUMMARY.md files from the phase
+2. Collect from each: `decisions`, `tech-stack.patterns`, `deviations`
+3. Identify 2-3 patterns that should become project conventions:
+   - Libraries chosen and why (e.g., "jose over jsonwebtoken for ESM compatibility")
+   - Architectural patterns established (e.g., "all forms use AJAX + Turnstile")
+   - Naming conventions emerging (e.g., "API routes follow /api/v1/resource")
+4. Present to user:
+
+```
+## Retrospective: Phase {X}
+
+### Neue Konventionen (Vorschlag)
+
+1. **{Pattern}**: {Description} — {Why}
+2. **{Pattern}**: {Description} — {Why}
+
+Sollen diese in die Projekt-CLAUDE.md aufgenommen werden? (ja/nein/anpassen)
+```
+
+5. If approved: append to project CLAUDE.md under a `## Conventions` section
+6. If declined: skip, no changes
+
+**Why this matters:** Each phase makes the next one faster. The planner reads CLAUDE.md and follows established conventions instead of rediscovering them.
+
+**Keep it light:** 2-3 conventions max per phase. No bureaucracy. User approves each one.
 </step>
 
 <step name="update_roadmap">

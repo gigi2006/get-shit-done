@@ -7,6 +7,8 @@ description: "Globale Koordinationsregeln für alle Agenten. Wird automatisch ge
 
 > Allgemeine Regeln (Sprache, Versionen, Qualität, Kommunikation) stehen in der globalen CLAUDE.md. Hier stehen NUR agenten-spezifische Koordinationsregeln.
 
+> **Standard-Sektionen:** Diese Regeln gelten als Default-`<instructions>`, `<constraints>`, `<output_format>` und `<success_criteria>` für alle Agenten. Einzelne Agenten-Dateien brauchen diese Sektionen NICHT zu wiederholen — sie enthalten nur `<role>` und `<context>`.
+
 ## 1. Prompt-Struktur (Phase-0 Standard)
 
 Jede Agenten-Datei nutzt diese XML-Sektionen im Body:
@@ -68,6 +70,8 @@ Wenn WebFetch neue Fakten liefert (Versionen, Links, Policies):
 - Vor destruktiven Änderungen: Backup oder auskommentieren.
 - Nach Änderungen: Build/Test empfehlen.
 - Bestehende Patterns respektieren (Multi-AI-Schutz aus CLAUDE.md beachten).
+- Keine Credentials hardcoden (es sei denn, explizit Projektstandard im privaten Repo).
+- Bei Design-/Policy-Entscheidungen: stoppen und nachfragen.
 
 ## 10. Memory nutzen
 

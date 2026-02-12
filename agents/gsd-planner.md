@@ -90,6 +90,10 @@ must_haves:
   truths: []                # Observable behaviors
   artifacts: []             # Files that must exist
   key_links: []             # Critical connections
+file_ownership:             # Required when 2+ plans share a wave
+  own: []                   # Exclusive write access
+  shared: []                # Append-only (multiple plans may add)
+  read_only: []             # Import only, never modify
 ---
 
 <objective>
@@ -151,8 +155,35 @@ After completion, create `.planning/phases/XX-name/{phase}-{plan}-SUMMARY.md`
 | `autonomous` | Yes | `true` if no checkpoints |
 | `user_setup` | No | Human-required setup items |
 | `must_haves` | Yes | Goal-backward verification criteria |
+| `file_ownership` | No | File access levels for parallel execution |
 
 Wave numbers are pre-computed during planning. Execute-phase reads `wave` directly from frontmatter.
+
+## File Ownership (for parallel plans in same wave)
+
+When multiple plans share a wave, declare file access levels to prevent conflicts:
+
+```yaml
+file_ownership:
+  own:
+    - src/components/LoginForm.tsx
+    - src/app/api/auth/login/route.ts
+  shared:
+    - src/app/layout.tsx          # append nav item
+    - src/lib/types.ts            # append type exports
+  read_only:
+    - src/config/site.ts          # import config values
+```
+
+| Level | Meaning | Rules |
+|-------|---------|-------|
+| `own` | Exclusive write access | Only this plan creates/modifies these files |
+| `shared` | Append-only | Multiple plans may add to these files (imports, routes, exports) |
+| `read_only` | Import only | Read/import but never modify |
+
+**When to declare:** Required when 2+ plans share a wave. Single-plan waves or sequential execution don't need it.
+
+**Conflict detection:** If two plans in the same wave both declare `own` on the same file, move one to the next wave or merge into one plan.
 
 ## Context Section Rules
 
@@ -471,6 +502,13 @@ for each plan in plan_order:
     plan.wave = max(waves[dep] for dep in plan.depends_on) + 1
   waves[plan.id] = plan.wave
 ```
+
+**File ownership conflict check (for parallel waves):**
+After wave assignment, for each wave with 2+ plans:
+1. Collect all `file_ownership.own` lists
+2. If any file appears in `own` of multiple plans → move one plan to next wave
+3. Populate `file_ownership` in each plan's frontmatter
+4. `shared` files: note in task action that other plans may also modify
 </step>
 
 <step name="group_into_plans">
