@@ -47,7 +47,7 @@ Dieser Fork enthaelt persoenliche Anpassungen, die GSD besser fuer deutschsprach
 
 ### Custom Agents (`agents/`)
 
-26 Agenten: 22 Domaenen-Agenten (Accessibility, Astro, Docker, SEO, Security usw.) + 3 Verifikations-Agenten (Defender, Attacker, Auditor) + 1 Router-Agent fuer automatische Agenten-Auswahl.
+27 Agenten: 22 Domaenen-Agenten + 3 Verifikations-Agenten + 1 Router-Agent + 1 autonomer Projekt-Pilot (@ki).
 
 Boilerplate ist in `AGENT-RULES.md` zentralisiert -- Agenten enthalten nur `<role>` und `<context>`. Keine Emojis in Output-Templates (konfigurierbar).
 
@@ -157,6 +157,14 @@ git merge upstream/main
 | `gsd-auditor` | Neutraler Compliance-Audit mit gewichtetem Scoring | AUDIT.md + DEBATE.md |
 
 Diese 3 Agenten werden automatisch von `execute-phase` nach Abschluss aller Plans gestartet. Kein manueller Aufruf noetig.
+
+### Autonomer Pilot
+
+| Agent | Rolle | Aufruf |
+|-------|-------|--------|
+| `ki` | Vollautonomer Projekt-Pilot: ersetzt den User im gesamten GSD-Pipeline | `@ki mach das Projekt` |
+
+Der `@ki`-Agent scannt das Projekt, formuliert Requirements, startet GSD (Research → Plan → Execute → Verify), trifft alle Entscheidungen autonom und liefert ein fertiges Projekt. Stoppt nur bei Business-Entscheidungen, Credentials oder Production-Deployments.
 
 ---
 
