@@ -1,8 +1,10 @@
 ---
 name: gsd-verifier
-description: Verifies phase goal achievement through goal-backward analysis. Checks codebase delivers what phase promised, not just that tasks completed. Creates VERIFICATION.md report.
+description: Verifiziert die Zielerreichung einer Phase durch Goal-Backward-Analyse. Prüft ob der Code das Phasenziel erfüllt, nicht nur ob Tasks erledigt sind. Erstellt VERIFICATION.md.
 tools: Read, Bash, Grep, Glob
+model: opus
 color: green
+memory: user
 ---
 
 <role>
@@ -455,52 +457,51 @@ Automated checks passed. Awaiting human verification.
 
 <stub_detection_patterns>
 
-## React Component Stubs
+## Stub Detection (adapt to project tech stack)
+
+**Common stub indicators across ALL frameworks:**
 
 ```javascript
-// RED FLAGS:
-return <div>Component</div>
-return <div>Placeholder</div>
-return <div>{/* TODO */}</div>
+// RED FLAGS — Empty/placeholder returns:
 return null
-return <></>
+return {}
+return []
+=> {}
+return <div>Placeholder</div>    // UI frameworks
+return "Not implemented"         // API routes
 
-// Empty handlers:
-onClick={() => {}}
-onChange={() => console.log('clicked')}
-onSubmit={(e) => e.preventDefault()}  // Only prevents default
+// RED FLAGS — Log-only handlers:
+onClick={() => console.log('clicked')}
+onSubmit={(e) => e.preventDefault())  // Only prevents default
+handler: () => { console.log('todo') }
+
+// RED FLAGS — Hardcoded data instead of real sources:
+return Response.json([])         // Empty array, no DB query
+return Response.json({ ok: true })  // Static response, ignores input
+const data = [{ id: 1, name: "Test" }]  // Hardcoded instead of fetched
 ```
 
-## API Route Stubs
+## Wiring Red Flags (framework-agnostic)
 
-```typescript
-// RED FLAGS:
-export async function POST() {
-  return Response.json({ message: "Not implemented" });
-}
-
-export async function GET() {
-  return Response.json([]); // Empty array with no DB query
-}
-```
-
-## Wiring Red Flags
-
-```typescript
+```javascript
 // Fetch exists but response ignored:
-fetch('/api/messages')  // No await, no .then, no assignment
+fetch('/api/endpoint')  // No await, no .then, no assignment
 
 // Query exists but result not returned:
-await prisma.message.findMany()
-return Response.json({ ok: true })  // Returns static, not query result
+await db.query(...)
+return { ok: true }  // Returns static, not query result
 
-// Handler only prevents default:
-onSubmit={(e) => e.preventDefault()}
+// Handler only logs or prevents default:
+onSubmit = (e) => { e.preventDefault() }  // No actual logic
 
-// State exists but not rendered:
-const [messages, setMessages] = useState([])
-return <div>No messages</div>  // Always shows "no messages"
+// State/data exists but not displayed:
+const data = await loadData()
+return renderTemplate('empty')  // Ignores loaded data
 ```
+
+**IMPORTANT:** Adapt detection patterns to the project's actual tech stack.
+Check the codebase map (`.planning/codebase/STACK.md`) for framework-specific patterns.
+Examples: Astro components use different patterns than React. FastAPI uses different patterns than Express.
 
 </stub_detection_patterns>
 

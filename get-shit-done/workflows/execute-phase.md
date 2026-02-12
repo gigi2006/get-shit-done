@@ -138,9 +138,10 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 4. **Report completion — spot-check claims first:**
 
    For each SUMMARY.md:
-   - Verify first 2 files from `key-files.created` exist on disk
+   - Verify ALL files from `key-files.created` exist on disk (not just a sample — the overhead is minimal, only existence checks)
    - Check `git log --oneline --all --grep="{phase}-{plan}"` returns ≥1 commit
    - Check for `## Self-Check: FAILED` marker
+   - Check for STUB/INCOMPLETE markers from extended self-check
 
    If ANY spot-check fails: report which plan failed, route to failure handler — ask "Retry plan?" or "Continue with remaining waves?"
 

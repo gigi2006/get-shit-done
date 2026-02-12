@@ -26,8 +26,6 @@
  *   summary-extract <path> [--fields]  Extract structured data from SUMMARY.md
  *   state-snapshot                     Structured parse of STATE.md
  *   phase-plan-index <phase>           Index plans with waves and status
- *   websearch <query>                  Search web via Brave API (if configured)
- *     [--limit N] [--freshness day|week|month]
  *
  * Phase Operations:
  *   phase next-decimal <phase>         Calculate next decimal phase number
@@ -128,12 +126,12 @@ const MODEL_PROFILES = {
   'gsd-executor':             { quality: 'opus', balanced: 'sonnet', budget: 'sonnet' },
   'gsd-phase-researcher':     { quality: 'opus', balanced: 'sonnet', budget: 'haiku' },
   'gsd-project-researcher':   { quality: 'opus', balanced: 'sonnet', budget: 'haiku' },
-  'gsd-research-synthesizer': { quality: 'sonnet', balanced: 'sonnet', budget: 'haiku' },
+  'gsd-research-synthesizer': { quality: 'opus', balanced: 'sonnet', budget: 'haiku' },
   'gsd-debugger':             { quality: 'opus', balanced: 'sonnet', budget: 'sonnet' },
-  'gsd-codebase-mapper':      { quality: 'sonnet', balanced: 'haiku', budget: 'haiku' },
-  'gsd-verifier':             { quality: 'sonnet', balanced: 'sonnet', budget: 'haiku' },
-  'gsd-plan-checker':         { quality: 'sonnet', balanced: 'sonnet', budget: 'haiku' },
-  'gsd-integration-checker':  { quality: 'sonnet', balanced: 'sonnet', budget: 'haiku' },
+  'gsd-codebase-mapper':      { quality: 'opus', balanced: 'haiku', budget: 'haiku' },
+  'gsd-verifier':             { quality: 'opus', balanced: 'sonnet', budget: 'haiku' },
+  'gsd-plan-checker':         { quality: 'opus', balanced: 'sonnet', budget: 'haiku' },
+  'gsd-integration-checker':  { quality: 'opus', balanced: 'sonnet', budget: 'haiku' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -167,7 +165,6 @@ function loadConfig(cwd) {
     plan_checker: true,
     verifier: true,
     parallelization: true,
-    brave_search: false,
   };
 
   try {
@@ -200,7 +197,6 @@ function loadConfig(cwd) {
       plan_checker: get('plan_checker', { section: 'workflow', field: 'plan_check' }) ?? defaults.plan_checker,
       verifier: get('verifier', { section: 'workflow', field: 'verifier' }) ?? defaults.verifier,
       parallelization,
-      brave_search: get('brave_search') ?? defaults.brave_search,
     };
   } catch {
     return defaults;
@@ -588,11 +584,6 @@ function cmdConfigEnsureSection(cwd, raw) {
     return;
   }
 
-  // Detect Brave Search API key availability
-  const homedir = require('os').homedir();
-  const braveKeyFile = path.join(homedir, '.gsd', 'brave_api_key');
-  const hasBraveSearch = !!(process.env.BRAVE_API_KEY || fs.existsSync(braveKeyFile));
-
   // Create default config
   const defaults = {
     model_profile: 'balanced',
@@ -607,7 +598,6 @@ function cmdConfigEnsureSection(cwd, raw) {
       verifier: true,
     },
     parallelization: true,
-    brave_search: hasBraveSearch,
   };
 
   try {
@@ -1151,6 +1141,22 @@ function cmdStateRecordMetric(cwd, options, raw) {
       tableBody = tableBody + '\n' + newRow;
     }
 
+    // Auto-prune: keep only most recent 10 metric rows
+    try {
+      const allLines = tableBody.split('\n');
+      const archiveSummary = allLines.find(l => /^Archived:\s*\d+\s*earlier phases/.test(l.trim()));
+      const dataRows = allLines.filter(l => l.trim().startsWith('|'));
+      const nonDataRows = allLines.filter(l => !l.trim().startsWith('|') && !(archiveSummary && l === archiveSummary));
+      const MAX_METRICS = 10;
+      if (dataRows.length > MAX_METRICS) {
+        const previouslyArchived = archiveSummary ? parseInt(archiveSummary.match(/(\d+)/)[1], 10) : 0;
+        const pruneCount = dataRows.length - MAX_METRICS;
+        const totalArchived = previouslyArchived + pruneCount;
+        const kept = dataRows.slice(pruneCount);
+        tableBody = `Archived: ${totalArchived} earlier phases\n` + kept.join('\n');
+      }
+    } catch (_) { /* defensive: skip pruning on any error */ }
+
     content = content.replace(metricsPattern, `${tableHeader}${tableBody}\n`);
     fs.writeFileSync(statePath, content, 'utf-8');
     output({ recorded: true, phase, plan, duration }, raw, 'true');
@@ -1186,6 +1192,82 @@ function cmdStateUpdateProgress(cwd, raw) {
   const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barWidth - filled);
   const progressStr = `[${bar}] ${percent}%`;
 
+  // Compress completed phases in Performance Metrics table
+  try {
+    const metricsPattern = /(##\s*Performance Metrics[\s\S]*?\n\|[^\n]+\n\|[-|\s]+\n)([\s\S]*?)(?=\n##|\n$|$)/i;
+    const metricsMatch = content.match(metricsPattern);
+    if (metricsMatch && fs.existsSync(phasesDir)) {
+      // Identify completed phases (those with SUMMARY.md files)
+      const completedPhaseNums = new Set();
+      const phaseNames = {};
+      const phaseDates = {};
+      const phaseDirEntries = fs.readdirSync(phasesDir, { withFileTypes: true })
+        .filter(e => e.isDirectory());
+      for (const dir of phaseDirEntries) {
+        const dm = dir.name.match(/^(\d+(?:\.\d+)?)-?(.*)/);
+        if (!dm) continue;
+        const phaseNum = dm[1];
+        const phaseName = dm[2] ? dm[2].replace(/-/g, ' ') : `Phase ${phaseNum}`;
+        const phaseFiles = fs.readdirSync(path.join(phasesDir, dir.name));
+        const hasSummary = phaseFiles.some(f => f.endsWith('-SUMMARY.md') || f === 'SUMMARY.md');
+        if (hasSummary) {
+          completedPhaseNums.add(phaseNum);
+          phaseNames[phaseNum] = phaseName;
+          // Try to get completion date from file mtime
+          const summaryFile = phaseFiles.find(f => f.endsWith('-SUMMARY.md') || f === 'SUMMARY.md');
+          if (summaryFile) {
+            try {
+              const stat = fs.statSync(path.join(phasesDir, dir.name, summaryFile));
+              phaseDates[phaseNum] = stat.mtime.toISOString().split('T')[0];
+            } catch (_) { phaseDates[phaseNum] = 'done'; }
+          }
+        }
+      }
+
+      if (completedPhaseNums.size > 0) {
+        const tableBody = metricsMatch[2];
+        const lines = tableBody.split('\n');
+        const archiveLine = lines.find(l => /^Archived:/.test(l.trim()));
+        const dataRows = lines.filter(l => l.trim().startsWith('|'));
+        const otherLines = lines.filter(l => !l.trim().startsWith('|') && !(archiveLine && l === archiveLine));
+
+        // Group rows by phase number
+        const phaseGroups = {};
+        const nonPhaseRows = [];
+        for (const row of dataRows) {
+          const pm = row.match(/Phase\s+(\d+(?:\.\d+)?)/i);
+          if (pm) {
+            const pn = pm[1];
+            if (!phaseGroups[pn]) phaseGroups[pn] = [];
+            phaseGroups[pn].push(row);
+          } else {
+            nonPhaseRows.push(row);
+          }
+        }
+
+        // Compress completed phases with multiple rows into one summary row
+        const compressedRows = [];
+        if (archiveLine) compressedRows.push(archiveLine);
+        const sortedPhases = Object.keys(phaseGroups).sort((a, b) => parseFloat(a) - parseFloat(b));
+        for (const pn of sortedPhases) {
+          const rows = phaseGroups[pn];
+          if (completedPhaseNums.has(pn) && rows.length > 1) {
+            // Compress: single summary line
+            const name = phaseNames[pn] || `Phase ${pn}`;
+            const date = phaseDates[pn] || 'done';
+            compressedRows.push(`| Phase ${pn}: ${name} | Done (${date}) | ${rows.length} plans | - |`);
+          } else {
+            compressedRows.push(...rows);
+          }
+        }
+        compressedRows.push(...nonPhaseRows);
+
+        const newTableBody = compressedRows.join('\n');
+        content = content.replace(metricsPattern, `${metricsMatch[1]}${newTableBody}\n`);
+      }
+    }
+  } catch (_) { /* defensive: skip compression on any error */ }
+
   const progressPattern = /(\*\*Progress:\*\*\s*).*/i;
   if (progressPattern.test(content)) {
     content = content.replace(progressPattern, `$1${progressStr}`);
@@ -1215,6 +1297,23 @@ function cmdStateAddDecision(cwd, options, raw) {
     // Remove placeholders
     sectionBody = sectionBody.replace(/None yet\.?\s*\n?/gi, '').replace(/No decisions yet\.?\s*\n?/gi, '');
     sectionBody = sectionBody.trimEnd() + '\n' + entry + '\n';
+
+    // Auto-prune: keep only most recent 20 decisions
+    try {
+      const lines = sectionBody.split('\n');
+      const archiveLine = lines.find(l => /^\.\.\.\s*\d+\s*earlier decisions archived/.test(l.trim()));
+      const decisionLines = lines.filter(l => l.trim().startsWith('- '));
+      const nonDecisionLines = lines.filter(l => !l.trim().startsWith('- ') && !(archiveLine && l === archiveLine));
+      const MAX_DECISIONS = 20;
+      if (decisionLines.length > MAX_DECISIONS) {
+        const previouslyArchived = archiveLine ? parseInt(archiveLine.match(/(\d+)/)[1], 10) : 0;
+        const pruneCount = decisionLines.length - MAX_DECISIONS;
+        const totalArchived = previouslyArchived + pruneCount;
+        const kept = decisionLines.slice(pruneCount);
+        sectionBody = `... ${totalArchived} earlier decisions archived\n` + kept.join('\n') + '\n';
+      }
+    } catch (_) { /* defensive: skip pruning on any error */ }
+
     content = content.replace(sectionPattern, `${match[1]}${sectionBody}`);
     fs.writeFileSync(statePath, content, 'utf-8');
     output({ added: true, decision: entry }, raw, 'true');
@@ -1323,8 +1422,8 @@ function cmdResolveModel(cwd, agentType, raw) {
 
   const agentModels = MODEL_PROFILES[agentType];
   if (!agentModels) {
-    const result = { model: 'sonnet', profile, unknown_agent: true };
-    output(result, raw, 'sonnet');
+    const result = { model: 'opus', profile, unknown_agent: true };
+    output(result, raw, 'opus');
     return;
   }
 
@@ -1995,70 +2094,6 @@ function cmdSummaryExtract(cwd, summaryPath, fields, raw) {
   }
 
   output(fullResult, raw);
-}
-
-// ─── Web Search (Brave API) ──────────────────────────────────────────────────
-
-async function cmdWebsearch(query, options, raw) {
-  const apiKey = process.env.BRAVE_API_KEY;
-
-  if (!apiKey) {
-    // No key = silent skip, agent falls back to built-in WebSearch
-    output({ available: false, reason: 'BRAVE_API_KEY not set' }, raw, '');
-    return;
-  }
-
-  if (!query) {
-    output({ available: false, error: 'Query required' }, raw, '');
-    return;
-  }
-
-  const params = new URLSearchParams({
-    q: query,
-    count: String(options.limit || 10),
-    country: 'us',
-    search_lang: 'en',
-    text_decorations: 'false'
-  });
-
-  if (options.freshness) {
-    params.set('freshness', options.freshness);
-  }
-
-  try {
-    const response = await fetch(
-      `https://api.search.brave.com/res/v1/web/search?${params}`,
-      {
-        headers: {
-          'Accept': 'application/json',
-          'X-Subscription-Token': apiKey
-        }
-      }
-    );
-
-    if (!response.ok) {
-      output({ available: false, error: `API error: ${response.status}` }, raw, '');
-      return;
-    }
-
-    const data = await response.json();
-
-    const results = (data.web?.results || []).map(r => ({
-      title: r.title,
-      url: r.url,
-      description: r.description,
-      age: r.age || null
-    }));
-
-    output({
-      available: true,
-      query,
-      count: results.length,
-      results
-    }, raw, results.map(r => `${r.title}\n${r.url}\n${r.description}`).join('\n\n'));
-  } catch (err) {
-    output({ available: false, error: err.message }, raw, '');
-  }
 }
 
 // ─── Frontmatter CRUD ────────────────────────────────────────────────────────
@@ -3478,8 +3513,8 @@ function resolveModelInternal(cwd, agentType) {
   const config = loadConfig(cwd);
   const profile = config.model_profile || 'balanced';
   const agentModels = MODEL_PROFILES[agentType];
-  if (!agentModels) return 'sonnet';
-  return agentModels[profile] || agentModels['balanced'] || 'sonnet';
+  if (!agentModels) return 'opus';
+  return agentModels[profile] || agentModels['balanced'] || 'opus';
 }
 
 function findPhaseInternal(cwd, phase) {
@@ -3733,11 +3768,6 @@ function cmdInitPlanPhase(cwd, phase, includes, raw) {
 function cmdInitNewProject(cwd, raw) {
   const config = loadConfig(cwd);
 
-  // Detect Brave Search API key availability
-  const homedir = require('os').homedir();
-  const braveKeyFile = path.join(homedir, '.gsd', 'brave_api_key');
-  const hasBraveSearch = !!(process.env.BRAVE_API_KEY || fs.existsSync(braveKeyFile));
-
   // Detect existing code
   let hasCode = false;
   let hasPackageFile = false;
@@ -3778,9 +3808,6 @@ function cmdInitNewProject(cwd, raw) {
 
     // Git state
     has_git: pathExistsInternal(cwd, '.git'),
-
-    // Enhanced search
-    brave_search_available: hasBraveSearch,
   };
 
   output(result, raw);
@@ -3923,7 +3950,6 @@ function cmdInitPhaseOp(cwd, phase, raw) {
   const result = {
     // Config
     commit_docs: config.commit_docs,
-    brave_search: config.brave_search,
 
     // Phase info
     phase_found: !!phaseInfo,
@@ -4211,7 +4237,7 @@ function cmdInitProgress(cwd, includes, raw) {
 
 // ─── CLI Router ───────────────────────────────────────────────────────────────
 
-async function main() {
+function main() {
   const args = process.argv.slice(2);
   const rawIndex = args.indexOf('--raw');
   const raw = rawIndex !== -1;
@@ -4575,17 +4601,6 @@ async function main() {
       const fieldsIndex = args.indexOf('--fields');
       const fields = fieldsIndex !== -1 ? args[fieldsIndex + 1].split(',') : null;
       cmdSummaryExtract(cwd, summaryPath, fields, raw);
-      break;
-    }
-
-    case 'websearch': {
-      const query = args[1];
-      const limitIdx = args.indexOf('--limit');
-      const freshnessIdx = args.indexOf('--freshness');
-      await cmdWebsearch(query, {
-        limit: limitIdx !== -1 ? parseInt(args[limitIdx + 1], 10) : 10,
-        freshness: freshnessIdx !== -1 ? args[freshnessIdx + 1] : null,
-      }, raw);
       break;
     }
 

@@ -1,8 +1,10 @@
 ---
 name: gsd-integration-checker
-description: Verifies cross-phase integration and E2E flows. Checks that phases connect properly and user workflows complete end-to-end.
+description: Prüft phasenübergreifende Integration und E2E-Flows. Stellt sicher, dass Phasen korrekt verbunden sind und User-Workflows durchgängig funktionieren.
 tools: Read, Bash, Grep, Glob
+model: opus
 color: blue
+memory: user
 ---
 
 <role>
@@ -24,6 +26,8 @@ Integration verification checks connections:
 4. **Data → Display** — Database has data, UI renders it?
 
 A "complete" codebase with broken wiring is a broken product.
+
+**Framework-agnostic:** The examples in this agent use React/Next.js syntax (useState, useAuth, fetch, axios, .tsx files). Adapt ALL verification patterns to the project's actual tech stack. Check `.planning/codebase/STACK.md` for framework-specific conventions. For example: Astro uses `.astro` files and frontmatter, not `.tsx` and hooks.
 </core_principle>
 
 <inputs>
@@ -125,18 +129,10 @@ Check that API routes have consumers.
 **Find all API routes:**
 
 ```bash
-# Next.js App Router
-find src/app/api -name "route.ts" 2>/dev/null | while read route; do
-  # Extract route path from file path
-  path=$(echo "$route" | sed 's|src/app/api||' | sed 's|/route.ts||')
-  echo "/api$path"
-done
-
-# Next.js Pages Router
-find src/pages/api -name "*.ts" 2>/dev/null | while read route; do
-  path=$(echo "$route" | sed 's|src/pages/api||' | sed 's|\.ts||')
-  echo "/api$path"
-done
+# Find API routes (adapt path to framework)
+# Astro: src/pages/api/  |  Next.js: src/app/api/ or src/pages/api/
+# FastAPI: src/routes/    |  Express: src/routes/ or src/api/
+# Detect framework from package.json or codebase map, then search accordingly
 ```
 
 **Check each route has consumers:**
@@ -185,8 +181,12 @@ grep -r -l "$protected_patterns" src/ --include="*.tsx" 2>/dev/null
 check_auth_protection() {
   local file="$1"
 
-  # Check for auth hooks/context usage
-  local has_auth=$(grep -E "useAuth|useSession|getCurrentUser|isAuthenticated" "$file" 2>/dev/null)
+  # Auth check patterns (adapt to framework)
+  # React: useAuth, useSession, getCurrentUser
+  # Astro: Astro.locals.user, session checks in frontmatter
+  # Server: middleware auth checks, req.user, ctx.user
+  # General: "auth", "session", "authenticated", "authorized"
+  local has_auth=$(grep -E "useAuth|useSession|getCurrentUser|isAuthenticated|Astro\.locals\.user|req\.user|ctx\.user|authenticated|authorized" "$file" 2>/dev/null)
 
   # Check for redirect on no auth
   local has_redirect=$(grep -E "redirect.*login|router.push.*login|navigate.*login" "$file" 2>/dev/null)
@@ -200,6 +200,10 @@ check_auth_protection() {
 ```
 
 ## Step 5: Verify E2E Flows
+
+**NOTE:** The flow examples below use generic patterns. Adapt function names,
+hooks, and import patterns to match the project's actual tech stack.
+Check `.planning/codebase/STACK.md` for framework-specific conventions.
 
 Derive flows from milestone goals and trace through codebase.
 
